@@ -1,1 +1,5 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
+data/Answers.csv filter=lfs diff=lfs merge=lfs -text
+data/Questions.csv filter=lfs diff=lfs merge=lfs -text
+data/Tags.csv filter=lfs diff=lfs merge=lfs -text
+data/database.sqlite filter=lfs diff=lfs merge=lfs -text
