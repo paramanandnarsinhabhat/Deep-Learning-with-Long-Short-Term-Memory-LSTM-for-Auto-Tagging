@@ -236,3 +236,135 @@ print(x_voc_size)
 x_tr_seq[0]
 
 print(x_tr_seq[0])
+
+# Model Building
+from keras.models import *
+from keras.layers import *
+from keras.callbacks import *
+
+### Define Model Architecture
+#sequential model
+model = Sequential()
+
+#embedding layer
+model.add(Embedding(x_voc_size, 50, trainable = True, input_shape=(max_len,),mask_zero=True))
+
+#lstm 
+model.add(LSTM(128))
+
+#dense layer
+model.add(Dense(128,activation='relu')) 
+
+#output layer
+model.add(Dense(10,activation='sigmoid'))
+
+model.summary()
+
+#define optimizer and loss
+model.compile(optimizer='adam',loss='binary_crossentropy')
+
+#checkpoint to save best model during training
+mc = ModelCheckpoint("weights.best.hdf5", monitor='val_loss', verbose=1, save_best_only=True, mode='min')
+
+### Train the Model
+#train the model 
+model.fit(x_tr_seq, y_tr, batch_size=128, epochs=10, verbose=1, validation_data=(x_val_seq, y_val), callbacks=[mc])
+
+# Model Predictions 
+# load weights into new model
+model.load_weights("weights.best.hdf5")
+
+#predict probabilities
+pred_prob = model.predict(x_val_seq)
+
+print(pred_prob[0])
+
+import numpy as np
+#define candidate threshold values
+threshold  = np.arange(0,0.5,0.01)
+print(threshold)
+
+# convert probabilities into classes or tags based on a threshold value
+def classify(pred_prob,thresh):
+  y_pred_seq = []
+
+  for i in pred_prob:
+    temp=[]
+    for j in i:
+      if j>=thresh:
+        temp.append(1)
+      else:
+        temp.append(0)
+    y_pred_seq.append(temp)
+
+  return y_pred_seq
+
+from sklearn import metrics
+score=[]
+
+#convert to 1 array
+y_true = np.array(y_val).ravel() 
+
+for thresh in threshold:
+    
+    #classes for each threshold
+    y_pred_seq = classify(pred_prob,thresh) 
+
+    #convert to 1d array
+    y_pred = np.array(y_pred_seq).ravel()
+
+    score.append(metrics.f1_score(y_true,y_pred))
+
+# find the optimal threshold
+opt = threshold[score.index(max(score))]
+opt
+
+print(opt)
+
+# Model Evaluation
+#predictions for optimal threshold
+y_pred_seq = classify(pred_prob,opt)
+y_pred = np.array(y_pred_seq).ravel()
+
+print(metrics.classification_report(y_true,y_pred))
+
+'''
+## How to improve Model's Performance?
+
+1. You can add more LSTM layers
+2. You can pass pre-trained word embeddings
+3. You can play with different optimizers
+4. Try different input sequence length
+
+'''
+y_pred = mlb.inverse_transform(np.array(y_pred_seq))
+y_true = mlb.inverse_transform(np.array(y_val))
+
+df = pd.DataFrame({'comment':x_val,'actual':y_true,'predictions':y_pred})
+
+print(df.head())
+
+def predict_tag(comment):  
+  text=[]
+
+  #preprocess  
+  text = [cleaner(comment)]
+
+  #convert to integer sequences
+  seq = x_tokenizer.texts_to_sequences(text)
+
+  #pad the sequence
+  pad_seq = pad_sequences(seq,  padding='post', maxlen=max_len)
+
+  #make predictions
+  pred_prob = model.predict(pad_seq)
+  classes = classify(pred_prob,opt)[0]
+  
+  classes = np.array([classes])
+  classes = mlb.inverse_transform(classes)  
+  return classes
+
+comment = "For example, in the case of logistic regression, the learning function is a Sigmoid function that tries to separate the 2 classes"
+
+print("Comment:",comment)
+print("Predicted Tags:",predict_tag(comment))
